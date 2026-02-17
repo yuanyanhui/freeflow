@@ -1,4 +1,5 @@
 using System;
+using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Input;
 using FreeFlow.Services;
@@ -22,6 +23,10 @@ public partial class App : Application
     private bool _isRecording = false;
     private string? _lastContextSummary;
     private string? _lastScreenshotBase64;
+    private IntPtr _targetWindowHandle = IntPtr.Zero;
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr GetForegroundWindow();
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -100,6 +105,10 @@ public partial class App : Application
     {
         _isRecording = true;
 
+        // Capture the target window handle before anything else
+        _targetWindowHandle = GetForegroundWindow();
+        System.Diagnostics.Debug.WriteLine($"Captured target window handle: {_targetWindowHandle}");
+
         // Capture context immediately
         _lastContextSummary = _screenCapture?.GetActiveWindowTitle();
         _lastScreenshotBase64 = _screenCapture?.CaptureActiveWindowAsBase64();
@@ -169,7 +178,7 @@ public partial class App : Application
             // 3. Paste
             if (!string.IsNullOrEmpty(finalTranscript) && _textInjector != null)
             {
-                await _textInjector.PasteTextAsync(finalTranscript);
+                await _textInjector.PasteTextAsync(finalTranscript, _targetWindowHandle);
             }
         }
         catch (Exception ex)
