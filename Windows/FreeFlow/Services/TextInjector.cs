@@ -39,6 +39,9 @@ public class TextInjector
     [DllImport("user32.dll")]
     private static extern IntPtr SendMessage(IntPtr hWnd, uint Msg, IntPtr wParam, IntPtr lParam);
 
+    [DllImport("user32.dll")]
+    private static extern IntPtr GetFocus();
+
     private const int SW_SHOW = 5;
 
     public TextInjector()
@@ -47,52 +50,56 @@ public class TextInjector
     }
 
     /// <summary>
-    /// Forcefully sets the foreground window using the AttachThreadInput trick.
-    /// Plain SetForegroundWindow only works once per session due to Windows restrictions.
+    /// Attaches to the target window's thread, gets the focused child control,
+    /// brings the window to foreground, and returns the focused child handle.
     /// </summary>
-    private bool ForceForegroundWindow(IntPtr hWnd)
+    private (bool focusRestored, IntPtr focusedChild) ForceForegroundAndGetFocus(IntPtr hWnd)
     {
         IntPtr currentForeground = GetForegroundWindow();
-        if (currentForeground == hWnd) return true;
-
         uint currentThreadId = GetCurrentThreadId();
-        uint foregroundThreadId = GetWindowThreadProcessId(currentForeground, out _);
         uint targetThreadId = GetWindowThreadProcessId(hWnd, out _);
+        uint foregroundThreadId = GetWindowThreadProcessId(currentForeground, out _);
+        IntPtr focusedChild = IntPtr.Zero;
 
-        bool attached = false;
+        // Track which thread attachments we made so we can clean up
+        bool attachedCurrentToForeground = false;
+        bool attachedCurrentToTarget = false;
+
         try
         {
-            // Attach to the current foreground window's thread
-            if (currentThreadId != foregroundThreadId)
+            // Attach our thread to the target window's thread so GetFocus works
+            if (currentThreadId != targetThreadId)
+            {
+                AttachThreadInput(currentThreadId, targetThreadId, true);
+                attachedCurrentToTarget = true;
+            }
+
+            // Also attach to the current foreground's thread if different
+            if (currentThreadId != foregroundThreadId && foregroundThreadId != targetThreadId)
             {
                 AttachThreadInput(currentThreadId, foregroundThreadId, true);
-                attached = true;
+                attachedCurrentToForeground = true;
             }
 
-            // Also attach to the target thread if different
-            if (foregroundThreadId != targetThreadId)
-            {
-                AttachThreadInput(foregroundThreadId, targetThreadId, true);
-            }
+            // Get the focused child control (e.g., Scintilla in Notepad++)
+            focusedChild = GetFocus();
+            System.Diagnostics.Debug.WriteLine($"GetFocus returned: {focusedChild}");
 
+            // Now bring the target to foreground
             ShowWindow(hWnd, SW_SHOW);
             BringWindowToTop(hWnd);
             SetForegroundWindow(hWnd);
         }
         finally
         {
-            // Detach threads
-            if (currentThreadId != foregroundThreadId)
-            {
+            if (attachedCurrentToTarget)
+                AttachThreadInput(currentThreadId, targetThreadId, false);
+            if (attachedCurrentToForeground)
                 AttachThreadInput(currentThreadId, foregroundThreadId, false);
-            }
-            if (foregroundThreadId != targetThreadId)
-            {
-                AttachThreadInput(foregroundThreadId, targetThreadId, false);
-            }
         }
 
-        return GetForegroundWindow() == hWnd;
+        bool focusRestored = GetForegroundWindow() == hWnd;
+        return (focusRestored, focusedChild);
     }
 
     public async Task PasteTextAsync(string text, IntPtr targetWindowHandle)
@@ -101,14 +108,7 @@ public class TextInjector
 
         try
         {
-            // Save current clipboard content
-            IDataObject? oldData = null;
-            await Application.Current.Dispatcher.InvokeAsync(() =>
-            {
-                try { oldData = Clipboard.GetDataObject(); } catch { }
-            });
-
-            // Set new text to clipboard
+            // Set text to clipboard
             bool setSuccess = false;
             for (int i = 0; i < 10; i++)
             {
@@ -136,12 +136,12 @@ public class TextInjector
             await Task.Delay(100);
 
             bool focusRestored = false;
+            IntPtr focusedChild = IntPtr.Zero;
 
-            // Explicitly restore focus to the target window
             if (targetWindowHandle != IntPtr.Zero && IsWindow(targetWindowHandle))
             {
-                focusRestored = ForceForegroundWindow(targetWindowHandle);
-                System.Diagnostics.Debug.WriteLine($"ForceForegroundWindow result: {focusRestored} (target={targetWindowHandle}, current={GetForegroundWindow()})");
+                (focusRestored, focusedChild) = ForceForegroundAndGetFocus(targetWindowHandle);
+                System.Diagnostics.Debug.WriteLine($"ForceForeground: restored={focusRestored}, child={focusedChild}, target={targetWindowHandle}, current={GetForegroundWindow()}");
                 await Task.Delay(200);
             }
             else
@@ -158,43 +158,33 @@ public class TextInjector
                 VirtualKeyCode.MENU, VirtualKeyCode.LMENU, VirtualKeyCode.RMENU
             };
             foreach (var mod in modifiers) _inputSimulator.Keyboard.KeyUp(mod);
-
-            // Wait for system to process key releases
             await Task.Delay(100);
 
-            // Primary: simulate Ctrl+V
+            // Strategy 1: Send WM_PASTE directly to the focused child control.
+            // This works even without foreground focus and targets the correct
+            // child window (e.g., Scintilla editor inside Notepad++).
+            IntPtr pasteTarget = (focusedChild != IntPtr.Zero && IsWindow(focusedChild))
+                ? focusedChild
+                : targetWindowHandle;
+
+            if (pasteTarget != IntPtr.Zero && IsWindow(pasteTarget))
+            {
+                System.Diagnostics.Debug.WriteLine($"Sending WM_PASTE to {pasteTarget}");
+                SendMessage(pasteTarget, WM_PASTE, IntPtr.Zero, IntPtr.Zero);
+            }
+
+            // Strategy 2: Also simulate Ctrl+V as belt-and-suspenders.
+            // If the window is now in foreground, this will work too.
+            await Task.Delay(100);
             _inputSimulator.Keyboard.KeyDown(VirtualKeyCode.CONTROL);
             await Task.Delay(50);
             _inputSimulator.Keyboard.KeyPress(VirtualKeyCode.VK_V);
             await Task.Delay(50);
             _inputSimulator.Keyboard.KeyUp(VirtualKeyCode.CONTROL);
-
             System.Diagnostics.Debug.WriteLine("Ctrl+V simulated");
 
-            // Fallback: if focus wasn't confirmed, also send WM_PASTE directly
-            if (!focusRestored && targetWindowHandle != IntPtr.Zero && IsWindow(targetWindowHandle))
-            {
-                await Task.Delay(300);
-
-                // Check if the Ctrl+V worked by seeing if target now has focus
-                if (GetForegroundWindow() != targetWindowHandle)
-                {
-                    System.Diagnostics.Debug.WriteLine("Ctrl+V likely missed target, sending WM_PASTE directly");
-                    SendMessage(targetWindowHandle, WM_PASTE, IntPtr.Zero, IntPtr.Zero);
-                }
-            }
-
-            // Wait for the app to process the paste before restoring clipboard
-            await Task.Delay(1000);
-
-            // Restore clipboard
-            if (oldData != null)
-            {
-                await Application.Current.Dispatcher.InvokeAsync(() =>
-                {
-                    try { Clipboard.SetDataObject(oldData); } catch { }
-                });
-            }
+            // Wait for paste to be processed
+            await Task.Delay(500);
         }
         catch (Exception ex)
         {
@@ -202,3 +192,4 @@ public class TextInjector
         }
     }
 }
+

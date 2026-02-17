@@ -81,7 +81,17 @@ public partial class App : Application
 
     private void OnKeyDown(Key key)
     {
-        if (key == Key.LWin || key == Key.RWin) _isWinPressed = true;
+        if (key == Key.LWin || key == Key.RWin)
+        {
+            _isWinPressed = true;
+            // Capture the foreground window the INSTANT Win is pressed,
+            // before Windows has any chance to activate Start menu or change focus
+            if (!_isRecording)
+            {
+                _targetWindowHandle = GetForegroundWindow();
+                System.Diagnostics.Debug.WriteLine($"Captured target window handle on Win press: {_targetWindowHandle}");
+            }
+        }
         if (key == Key.J) _isJPressed = true;
 
         if (_isWinPressed && _isJPressed && !_isRecording)
@@ -104,10 +114,6 @@ public partial class App : Application
     private void StartRecordingFlow()
     {
         _isRecording = true;
-
-        // Capture the target window handle before anything else
-        _targetWindowHandle = GetForegroundWindow();
-        System.Diagnostics.Debug.WriteLine($"Captured target window handle: {_targetWindowHandle}");
 
         // Capture context immediately
         _lastContextSummary = _screenCapture?.GetActiveWindowTitle();
