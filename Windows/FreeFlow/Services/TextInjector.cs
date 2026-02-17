@@ -14,41 +14,59 @@ public class TextInjector
         _inputSimulator = new InputSimulator();
     }
 
-    public void PasteText(string text)
+    public async Task PasteTextAsync(string text)
     {
         if (string.IsNullOrEmpty(text)) return;
 
-        // Run on UI thread because of Clipboard
-        Application.Current.Dispatcher.Invoke(() =>
+        try
         {
-            try
+            // Save current clipboard content
+            IDataObject? oldData = null;
+            await Application.Current.Dispatcher.InvokeAsync(() =>
             {
-                // Save current clipboard
-                var oldData = Clipboard.GetDataObject();
+                try { oldData = Clipboard.GetDataObject(); } catch { }
+            });
 
-                // Set new text
-                Clipboard.SetText(text);
-
-                // Wait a bit
-                Thread.Sleep(50);
-
-                // Simulate Ctrl+V
-                _inputSimulator.Keyboard.ModifiedKeyStroke(VirtualKeyCode.CONTROL, VirtualKeyCode.VK_V);
-
-                // Wait a bit for the app to process the paste
-                Thread.Sleep(100);
-
-                // Restore clipboard
-                if (oldData != null)
+            // Set new text to clipboard
+            bool setSuccess = false;
+            for (int i = 0; i < 10; i++)
+            {
+                await Application.Current.Dispatcher.InvokeAsync(() =>
                 {
-                    Clipboard.SetDataObject(oldData);
-                }
+                    try
+                    {
+                        Clipboard.SetDataObject(text, true);
+                        setSuccess = true;
+                    }
+                    catch { }
+                });
+                if (setSuccess) break;
+                await Task.Delay(50);
             }
-            catch (Exception ex)
+
+            if (!setSuccess) return;
+
+            // Wait for clipboard to settle
+            await Task.Delay(100);
+
+            // Simulate Ctrl+V
+            _inputSimulator.Keyboard.ModifiedKeyStroke(VirtualKeyCode.CONTROL, VirtualKeyCode.VK_V);
+
+            // Wait longer for the app to process the paste before restoring clipboard
+            await Task.Delay(500);
+
+            // Restore clipboard
+            if (oldData != null)
             {
-                // Log or handle error
-                Console.WriteLine($"Paste failed: {ex.Message}");
+                await Application.Current.Dispatcher.InvokeAsync(() =>
+                {
+                    try { Clipboard.SetDataObject(oldData); } catch { }
+                });
             }
-        });
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Paste failed: {ex.Message}");
+        }
     }
 }

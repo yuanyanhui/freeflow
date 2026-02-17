@@ -24,27 +24,43 @@ public class GroqClient
 
     public async Task<string> TranscribeAsync(string filePath)
     {
-        using var content = new MultipartFormDataContent();
-        var fileContent = new ByteArrayContent(await File.ReadAllBytesAsync(filePath));
-        fileContent.Headers.ContentType = MediaTypeHeaderValue.Parse("audio/wav");
-        content.Add(fileContent, "file", Path.GetFileName(filePath));
-        content.Add(new StringContent("whisper-large-v3"), "model");
+        try
+        {
+            using var content = new MultipartFormDataContent();
+            var fileBytes = await File.ReadAllBytesAsync(filePath);
+            var fileContent = new ByteArrayContent(fileBytes);
+            fileContent.Headers.ContentType = MediaTypeHeaderValue.Parse("audio/wav");
+            content.Add(fileContent, "file", Path.GetFileName(filePath));
+            content.Add(new StringContent("whisper-large-v3"), "model");
 
-        var response = await _httpClient.PostAsync($"{BaseUrl}/audio/transcriptions", content);
-        response.EnsureSuccessStatusCode();
+            var response = await _httpClient.PostAsync($"{BaseUrl}/audio/transcriptions", content);
+            if (!response.IsSuccessStatusCode)
+            {
+                var error = await response.Content.ReadAsStringAsync();
+                System.Diagnostics.Debug.WriteLine($"Transcription failed: {response.StatusCode} - {error}");
+                return "";
+            }
 
-        var json = await response.Content.ReadAsStringAsync();
-        var result = JsonConvert.DeserializeObject<JObject>(json);
-        return result?["text"]?.ToString() ?? "";
+            var json = await response.Content.ReadAsStringAsync();
+            var result = JsonConvert.DeserializeObject<JObject>(json);
+            return result?["text"]?.ToString() ?? "";
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Transcription exception: {ex.Message}");
+            return "";
+        }
     }
 
     public async Task<string> PostProcessAsync(string transcript, string contextSummary, string? screenshotBase64 = null, string customVocabulary = "")
     {
-        var model = "meta-llama/llama-4-scout-17b-16e-instruct"; // Using the same model as Mac app if available, otherwise fallback
+        var model = "llama-3.2-90b-vision-preview"; // Use a confirmed vision model
 
-        var vocabularyPrompt = !string.IsNullOrEmpty(customVocabulary) ? $"\n\nThe following vocabulary must be treated as high-priority terms while rewriting. Use these spellings exactly in the output when relevant:\n{customVocabulary}" : "";
+        try
+        {
+            var vocabularyPrompt = !string.IsNullOrEmpty(customVocabulary) ? $"\n\nThe following vocabulary must be treated as high-priority terms while rewriting. Use these spellings exactly in the output when relevant:\n{customVocabulary}" : "";
 
-        var systemPrompt = $@"You are a dictation post-processor. You receive raw speech-to-text output and return clean text ready to be typed into an application.
+            var systemPrompt = $@"You are a dictation post-processor. You receive raw speech-to-text output and return clean text ready to be typed into an application.
 
 Your job:
 - Remove filler words (um, uh, you know, like) unless they carry meaning.
@@ -58,57 +74,64 @@ Output rules:
 - Do not add words, names, or content that are not in the transcription. The context is only for correcting spelling of words already spoken.
 - Do not change the meaning of what was said.{vocabularyPrompt}";
 
-        var userMessageContent = new JArray();
-        userMessageContent.Add(new JObject
-        {
-            ["type"] = "text",
-            ["text"] = $"Instructions: Clean up this RAW_TRANSCRIPTION. Return EMPTY if there should be no result.\n\nCONTEXT: \"{contextSummary}\"\n\nRAW_TRANSCRIPTION: \"{transcript}\""
-        });
-
-        if (!string.IsNullOrEmpty(screenshotBase64))
-        {
+            var userMessageContent = new JArray();
             userMessageContent.Add(new JObject
             {
-                ["type"] = "image_url",
-                ["image_url"] = new JObject
-                {
-                    ["url"] = $"data:image/jpeg;base64,{screenshotBase64}"
-                }
+                ["type"] = "text",
+                ["text"] = $"Instructions: Clean up this RAW_TRANSCRIPTION. Return EMPTY if there should be no result.\n\nCONTEXT: \"{contextSummary}\"\n\nRAW_TRANSCRIPTION: \"{transcript}\""
             });
-        }
 
-        var payload = new JObject
-        {
-            ["model"] = model,
-            ["temperature"] = 0.0,
-            ["messages"] = new JArray
+            if (!string.IsNullOrEmpty(screenshotBase64))
             {
-                new JObject { ["role"] = "system", ["content"] = systemPrompt },
-                new JObject { ["role"] = "user", ["content"] = userMessageContent }
+                userMessageContent.Add(new JObject
+                {
+                    ["type"] = "image_url",
+                    ["image_url"] = new JObject
+                    {
+                        ["url"] = $"data:image/jpeg;base64,{screenshotBase64}"
+                    }
+                });
             }
-        };
 
-        var content = new StringContent(payload.ToString(), Encoding.UTF8, "application/json");
-        var response = await _httpClient.PostAsync($"{BaseUrl}/chat/completions", content);
+            var payload = new JObject
+            {
+                ["model"] = model,
+                ["temperature"] = 0.0,
+                ["messages"] = new JArray
+                {
+                    new JObject { ["role"] = "system", ["content"] = systemPrompt },
+                    new JObject { ["role"] = "user", ["content"] = userMessageContent }
+                }
+            };
 
-        if (!response.IsSuccessStatusCode)
-        {
-             // Fallback if vision model fails or is unavailable
-             return transcript;
+            var content = new StringContent(payload.ToString(), Encoding.UTF8, "application/json");
+            var response = await _httpClient.PostAsync($"{BaseUrl}/chat/completions", content);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                var error = await response.Content.ReadAsStringAsync();
+                System.Diagnostics.Debug.WriteLine($"Post-processing failed: {response.StatusCode} - {error}. Falling back to raw transcript.");
+                return transcript;
+            }
+
+            var json = await response.Content.ReadAsStringAsync();
+            var result = JsonConvert.DeserializeObject<JObject>(json);
+            var cleaned = result?["choices"]?[0]?["message"]?["content"]?.ToString()?.Trim() ?? "";
+
+            if (cleaned == "EMPTY") return "";
+
+            // Strip quotes if LLM added them
+            if (cleaned.StartsWith("\"") && cleaned.EndsWith("\"") && cleaned.Length > 1)
+            {
+                cleaned = cleaned.Substring(1, cleaned.Length - 2).Trim();
+            }
+
+            return cleaned;
         }
-
-        var json = await response.Content.ReadAsStringAsync();
-        var result = JsonConvert.DeserializeObject<JObject>(json);
-        var cleaned = result?["choices"]?[0]?["message"]?["content"]?.ToString()?.Trim() ?? "";
-
-        if (cleaned == "EMPTY") return "";
-
-        // Strip quotes if LLM added them
-        if (cleaned.StartsWith("\"") && cleaned.EndsWith("\"") && cleaned.Length > 1)
+        catch (Exception ex)
         {
-            cleaned = cleaned.Substring(1, cleaned.Length - 2).Trim();
+            System.Diagnostics.Debug.WriteLine($"Post-processing exception: {ex.Message}. Falling back to raw transcript.");
+            return transcript;
         }
-
-        return cleaned;
     }
 }

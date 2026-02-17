@@ -137,6 +137,7 @@ public partial class App : Application
 
             // 1. Transcribe
             string rawTranscript = await groqClient.TranscribeAsync(audioPath);
+            System.Diagnostics.Debug.WriteLine($"Raw transcript: {rawTranscript}");
 
             if (string.IsNullOrWhiteSpace(rawTranscript))
             {
@@ -151,20 +152,24 @@ public partial class App : Application
                 _lastContextSummary ?? "",
                 _lastScreenshotBase64,
                 _settingsService?.CurrentSettings.CustomVocabulary ?? "");
+            System.Diagnostics.Debug.WriteLine($"Final transcript: {finalTranscript}");
 
             // 3. Paste
-            _textInjector?.PasteText(finalTranscript);
+            if (!string.IsNullOrEmpty(finalTranscript) && _textInjector != null)
+            {
+                await _textInjector.PasteTextAsync(finalTranscript);
+            }
         }
         catch (Exception ex)
         {
-            MessageBox.Show($"Error: {ex.Message}", "FreeFlow", MessageBoxButton.OK, MessageBoxImage.Error);
+            MessageBox.Show($"Error: {ex.Message}\n{ex.StackTrace}", "FreeFlow Error", MessageBoxButton.OK, MessageBoxImage.Error);
         }
         finally
         {
             Dispatcher.Invoke(() => _overlay?.Close());
             if (System.IO.File.Exists(audioPath))
             {
-                System.IO.File.Delete(audioPath);
+                try { System.IO.File.Delete(audioPath); } catch { }
             }
         }
     }
