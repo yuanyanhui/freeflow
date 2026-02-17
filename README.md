@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="Resources/AppIcon-README.png" width="128" height="128" alt="FreeFlow icon">
+  <img src="macOS/Resources/AppIcon-README.png" width="128" height="128" alt="FreeFlow icon">
 </p>
 
 <h1 align="center">FreeFlow</h1>
@@ -16,7 +16,7 @@
 ---
 
 <p align="center">
-  <img src="Resources/demo.gif" alt="FreeFlow demo" width="600">
+  <img src="macOS/Resources/demo.gif" alt="FreeFlow demo" width="600">
 </p>
 
 I like the concept of apps like [Wispr Flow](https://wisprflow.ai/), [Superwhisper](https://superwhisper.com/), and [Monologue](https://www.monologue.to/) that use AI to add accurate and easy-to-use transcription to your computer, but they all charge fees of ~$10/month when the underlying AI models are free to use or cost pennies.
