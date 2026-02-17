@@ -42,12 +42,15 @@ public partial class App : Application
         _settingsService = new SettingsService();
     }
 
+    private bool _isWinPressed = false;
+    private bool _isJPressed = false;
+
     private void InitializeTray()
     {
         _notifyIcon = new TaskbarIcon();
         // Use a system icon as fallback
         _notifyIcon.Icon = SystemIcons.Application;
-        _notifyIcon.ToolTipText = "FreeFlow - Hold Right Alt to record";
+        _notifyIcon.ToolTipText = "FreeFlow - Hold Win + J to record";
 
         var contextMenu = new System.Windows.Controls.ContextMenu();
 
@@ -73,8 +76,10 @@ public partial class App : Application
 
     private void OnKeyDown(Key key)
     {
-        // Default hotkey: Right Alt (System.Windows.Input.Key.RightAlt)
-        if (key == Key.RightAlt && !_isRecording)
+        if (key == Key.LWin || key == Key.RWin) _isWinPressed = true;
+        if (key == Key.J) _isJPressed = true;
+
+        if (_isWinPressed && _isJPressed && !_isRecording)
         {
             StartRecordingFlow();
         }
@@ -82,7 +87,10 @@ public partial class App : Application
 
     private void OnKeyUp(Key key)
     {
-        if (key == Key.RightAlt && _isRecording)
+        if (key == Key.LWin || key == Key.RWin) _isWinPressed = false;
+        if (key == Key.J) _isJPressed = false;
+
+        if ((!_isWinPressed || !_isJPressed) && _isRecording)
         {
             StopRecordingFlow();
         }
