@@ -54,7 +54,7 @@ public class GroqClient
 
     public async Task<string> PostProcessAsync(string transcript, string contextSummary, string? screenshotBase64 = null, string customVocabulary = "")
     {
-        var model = "llama-3.2-90b-vision-preview"; // Use a confirmed vision model
+        var model = "meta-llama/llama-4-scout-17b-16e-instruct"; // Consistent with macOS version
 
         try
         {
