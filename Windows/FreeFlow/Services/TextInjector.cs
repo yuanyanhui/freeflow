@@ -165,23 +165,27 @@ public class TextInjector
             // child window (e.g., Scintilla editor inside Notepad++).
             IntPtr pasteTarget = (focusedChild != IntPtr.Zero && IsWindow(focusedChild))
                 ? focusedChild
-                : targetWindowHandle;
+                : IntPtr.Zero;
 
-            if (pasteTarget != IntPtr.Zero && IsWindow(pasteTarget))
+            bool wmPasteSent = false;
+            if (pasteTarget != IntPtr.Zero)
             {
-                System.Diagnostics.Debug.WriteLine($"Sending WM_PASTE to {pasteTarget}");
+                System.Diagnostics.Debug.WriteLine($"Sending WM_PASTE to child {pasteTarget}");
                 SendMessage(pasteTarget, WM_PASTE, IntPtr.Zero, IntPtr.Zero);
+                wmPasteSent = true;
             }
 
-            // Strategy 2: Also simulate Ctrl+V as belt-and-suspenders.
-            // If the window is now in foreground, this will work too.
-            await Task.Delay(100);
-            _inputSimulator.Keyboard.KeyDown(VirtualKeyCode.CONTROL);
-            await Task.Delay(50);
-            _inputSimulator.Keyboard.KeyPress(VirtualKeyCode.VK_V);
-            await Task.Delay(50);
-            _inputSimulator.Keyboard.KeyUp(VirtualKeyCode.CONTROL);
-            System.Diagnostics.Debug.WriteLine("Ctrl+V simulated");
+            // Strategy 2: Simulate Ctrl+V as fallback when we couldn't find a child control.
+            if (!wmPasteSent)
+            {
+                await Task.Delay(100);
+                _inputSimulator.Keyboard.KeyDown(VirtualKeyCode.CONTROL);
+                await Task.Delay(50);
+                _inputSimulator.Keyboard.KeyPress(VirtualKeyCode.VK_V);
+                await Task.Delay(50);
+                _inputSimulator.Keyboard.KeyUp(VirtualKeyCode.CONTROL);
+                System.Diagnostics.Debug.WriteLine("Ctrl+V simulated (fallback)");
+            }
 
             // Wait for paste to be processed
             await Task.Delay(500);
