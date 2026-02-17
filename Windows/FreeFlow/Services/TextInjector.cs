@@ -160,31 +160,33 @@ public class TextInjector
             foreach (var mod in modifiers) _inputSimulator.Keyboard.KeyUp(mod);
             await Task.Delay(100);
 
-            // Strategy 1: Send WM_PASTE directly to the focused child control.
-            // This works even without foreground focus and targets the correct
-            // child window (e.g., Scintilla editor inside Notepad++).
-            IntPtr pasteTarget = (focusedChild != IntPtr.Zero && IsWindow(focusedChild))
-                ? focusedChild
-                : IntPtr.Zero;
-
-            bool wmPasteSent = false;
-            if (pasteTarget != IntPtr.Zero)
+            // If focus was restored, Ctrl+V works universally (Word, browsers, etc.)
+            // If not, fall back to WM_PASTE directed at the child control (Notepad++, etc.)
+            if (focusRestored)
             {
-                System.Diagnostics.Debug.WriteLine($"Sending WM_PASTE to child {pasteTarget}");
-                SendMessage(pasteTarget, WM_PASTE, IntPtr.Zero, IntPtr.Zero);
-                wmPasteSent = true;
-            }
-
-            // Strategy 2: Simulate Ctrl+V as fallback when we couldn't find a child control.
-            if (!wmPasteSent)
-            {
-                await Task.Delay(100);
                 _inputSimulator.Keyboard.KeyDown(VirtualKeyCode.CONTROL);
                 await Task.Delay(50);
                 _inputSimulator.Keyboard.KeyPress(VirtualKeyCode.VK_V);
                 await Task.Delay(50);
                 _inputSimulator.Keyboard.KeyUp(VirtualKeyCode.CONTROL);
-                System.Diagnostics.Debug.WriteLine("Ctrl+V simulated (fallback)");
+                System.Diagnostics.Debug.WriteLine("Pasted via Ctrl+V (focus restored)");
+            }
+            else
+            {
+                // Send WM_PASTE to the focused child control (e.g., Scintilla in Notepad++)
+                IntPtr pasteTarget = (focusedChild != IntPtr.Zero && IsWindow(focusedChild))
+                    ? focusedChild
+                    : targetWindowHandle;
+
+                if (pasteTarget != IntPtr.Zero && IsWindow(pasteTarget))
+                {
+                    System.Diagnostics.Debug.WriteLine($"Pasted via WM_PASTE to {pasteTarget} (focus not restored)");
+                    SendMessage(pasteTarget, WM_PASTE, IntPtr.Zero, IntPtr.Zero);
+                }
+                else
+                {
+                    System.Diagnostics.Debug.WriteLine("Paste failed: no valid target for WM_PASTE");
+                }
             }
 
             // Wait for paste to be processed
