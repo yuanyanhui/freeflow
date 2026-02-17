@@ -23,7 +23,7 @@ jobs:
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
 
       - name: Embed build tag in Info.plist
-        run: plutil -insert FreeFlowBuildTag -string "${{ steps.version.outputs.tag }}" Info.plist
+        run: plutil -insert FreeFlowBuildTag -string "${{ steps.version.outputs.tag }}" macOS/Info.plist
 
       - name: Install create-dmg
         run: brew install create-dmg
@@ -88,24 +88,24 @@ jobs:
 
       # --- Build universal ---
       - name: Build universal
-        run: make ARCH=universal APP_NAME=FreeFlow BUNDLE_ID=com.zachlatta.freeflow CODESIGN_IDENTITY="$CODESIGN_IDENTITY"
+        run: cd macOS && make ARCH=universal APP_NAME=FreeFlow BUNDLE_ID=com.zachlatta.freeflow CODESIGN_IDENTITY="$CODESIGN_IDENTITY"
 
       - name: Create universal DMG
-        run: make dmg ARCH=universal APP_NAME=FreeFlow BUNDLE_ID=com.zachlatta.freeflow CODESIGN_IDENTITY="$CODESIGN_IDENTITY"
+        run: cd macOS && make dmg ARCH=universal APP_NAME=FreeFlow BUNDLE_ID=com.zachlatta.freeflow CODESIGN_IDENTITY="$CODESIGN_IDENTITY"
 
       - name: Sign universal DMG
-        run: codesign --force --sign "$CODESIGN_IDENTITY" build/FreeFlow.dmg
+        run: codesign --force --sign "$CODESIGN_IDENTITY" macOS/build/FreeFlow.dmg
 
       - name: Notarize universal DMG
         run: |
-          xcrun notarytool submit build/FreeFlow.dmg \
+          xcrun notarytool submit macOS/build/FreeFlow.dmg \
             --keychain-profile "notarytool-profile" \
             --keychain "$KEYCHAIN_PATH" \
             --wait
-          xcrun stapler staple build/FreeFlow.dmg
+          xcrun stapler staple macOS/build/FreeFlow.dmg
 
       - name: Save universal DMG
-        run: mv build/FreeFlow.dmg FreeFlow.dmg
+        run: mv macOS/build/FreeFlow.dmg FreeFlow.dmg
 
       # --- Release ---
       - name: Create Release
