@@ -1,0 +1,19 @@
+<Window x:Class="FreeFlow.Views.SettingsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="FreeFlow Settings" Height="450" Width="400" WindowStartupLocation="CenterScreen">
+    <Grid Margin="20">
+        <StackPanel>
+            <TextBlock Text="Groq API Key" FontWeight="Bold" Margin="0,0,0,5"/>
+            <PasswordBox x:Name="ApiKeyBox" Margin="0,0,0,20"/>
+
+            <TextBlock Text="Microphone" FontWeight="Bold" Margin="0,0,0,5"/>
+            <ComboBox x:Name="MicComboBox" Margin="0,0,0,20" DisplayMemberPath="ProductName"/>
+
+            <TextBlock Text="Custom Vocabulary" FontWeight="Bold" Margin="0,0,0,5"/>
+            <TextBox x:Name="VocabularyBox" Height="100" AcceptsReturn="True" VerticalScrollBarVisibility="Auto" Margin="0,0,0,20"/>
+
+            <Button Content="Save" Click="SaveButton_Click" Height="30" Width="100" HorizontalAlignment="Right"/>
+        </StackPanel>
+    </Grid>
+</Window>
