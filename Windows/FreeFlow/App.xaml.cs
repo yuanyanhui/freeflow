@@ -162,6 +162,10 @@ public partial class App : Application
                 _settingsService?.CurrentSettings.CustomVocabulary ?? "");
             System.Diagnostics.Debug.WriteLine($"Final transcript: {finalTranscript}");
 
+            // Close overlay BEFORE pasting to ensure focus returns to target app
+            Dispatcher.Invoke(() => _overlay?.Close());
+            await Task.Delay(150); // Give OS time to restore focus
+
             // 3. Paste
             if (!string.IsNullOrEmpty(finalTranscript) && _textInjector != null)
             {
@@ -174,6 +178,7 @@ public partial class App : Application
         }
         finally
         {
+            // Just in case it wasn't closed in the try block
             Dispatcher.Invoke(() => _overlay?.Close());
             if (System.IO.File.Exists(audioPath))
             {

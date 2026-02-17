@@ -35,13 +35,14 @@ public class TextInjector
                 {
                     try
                     {
-                        Clipboard.SetDataObject(text, true);
+                        Clipboard.Clear();
+                        Clipboard.SetText(text, TextDataFormat.UnicodeText);
                         setSuccess = true;
                     }
                     catch { }
                 });
                 if (setSuccess) break;
-                await Task.Delay(50);
+                await Task.Delay(100);
             }
 
             if (!setSuccess) return;
@@ -49,11 +50,28 @@ public class TextInjector
             // Wait for clipboard to settle
             await Task.Delay(100);
 
-            // Simulate Ctrl+V
-            _inputSimulator.Keyboard.ModifiedKeyStroke(VirtualKeyCode.CONTROL, VirtualKeyCode.VK_V);
+            // Release all modifiers that might be physically held
+            var modifiers = new[] 
+            { 
+                VirtualKeyCode.LWIN, VirtualKeyCode.RWIN, 
+                VirtualKeyCode.SHIFT, VirtualKeyCode.LSHIFT, VirtualKeyCode.RSHIFT,
+                VirtualKeyCode.CONTROL, VirtualKeyCode.LCONTROL, VirtualKeyCode.RCONTROL,
+                VirtualKeyCode.MENU, VirtualKeyCode.LMENU, VirtualKeyCode.RMENU 
+            };
+            foreach (var mod in modifiers) _inputSimulator.Keyboard.KeyUp(mod);
+            
+            // Wait for system to process key releases
+            await Task.Delay(100);
+
+            // Simulate Ctrl+V with explicit delays
+            _inputSimulator.Keyboard.KeyDown(VirtualKeyCode.CONTROL);
+            await Task.Delay(50);
+            _inputSimulator.Keyboard.KeyPress(VirtualKeyCode.VK_V);
+            await Task.Delay(50);
+            _inputSimulator.Keyboard.KeyUp(VirtualKeyCode.CONTROL);
 
             // Wait longer for the app to process the paste before restoring clipboard
-            await Task.Delay(500);
+            await Task.Delay(1000);
 
             // Restore clipboard
             if (oldData != null)
