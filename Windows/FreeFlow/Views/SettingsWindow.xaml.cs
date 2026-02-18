@@ -30,6 +30,7 @@ public partial class SettingsWindow : Window
         }
 
         VocabularyBox.Text = _settingsService.CurrentSettings.CustomVocabulary;
+        PostProcessingCheckBox.IsChecked = _settingsService.CurrentSettings.IsPostProcessingEnabled;
     }
 
     private void SaveButton_Click(object sender, RoutedEventArgs e)
@@ -37,6 +38,7 @@ public partial class SettingsWindow : Window
         _credentialService.SaveApiKey(ApiKeyBox.Password);
         _settingsService.CurrentSettings.SelectedMicrophoneIndex = MicComboBox.SelectedIndex;
         _settingsService.CurrentSettings.CustomVocabulary = VocabularyBox.Text;
+        _settingsService.CurrentSettings.IsPostProcessingEnabled = PostProcessingCheckBox.IsChecked ?? true;
         _settingsService.Save();
 
         MessageBox.Show("Settings saved successfully!", "FreeFlow", MessageBoxButton.OK, MessageBoxImage.Information);

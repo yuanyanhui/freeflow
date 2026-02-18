@@ -13,6 +13,8 @@
             <TextBlock Text="Custom Vocabulary" FontWeight="Bold" Margin="0,0,0,5"/>
             <TextBox x:Name="VocabularyBox" Height="100" AcceptsReturn="True" VerticalScrollBarVisibility="Auto" Margin="0,0,0,20"/>
 
+            <CheckBox x:Name="PostProcessingCheckBox" Content="Enable Post-Processing (LLM Cleanup)" Margin="0,0,0,20"/>
+            
             <Button Content="Save" Click="SaveButton_Click" Height="30" Width="100" HorizontalAlignment="Right"/>
         </StackPanel>
     </Grid>

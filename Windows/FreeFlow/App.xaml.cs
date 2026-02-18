@@ -169,12 +169,16 @@ public partial class App : Application
             }
 
             // 2. Post-process
-            Dispatcher.Invoke(() => _overlay?.SetStatus("Processing..."));
-            string finalTranscript = await groqClient.PostProcessAsync(
-                rawTranscript,
-                _lastContextSummary ?? "",
-                _lastScreenshotBase64,
-                _settingsService?.CurrentSettings.CustomVocabulary ?? "");
+            string finalTranscript = rawTranscript;
+            if (_settingsService?.CurrentSettings.IsPostProcessingEnabled == true)
+            {
+                Dispatcher.Invoke(() => _overlay?.SetStatus("Processing..."));
+                finalTranscript = await groqClient.PostProcessAsync(
+                    rawTranscript,
+                    _lastContextSummary ?? "",
+                    _lastScreenshotBase64,
+                    _settingsService?.CurrentSettings.CustomVocabulary ?? "");
+            }
             System.Diagnostics.Debug.WriteLine($"Final transcript: {finalTranscript}");
 
             // Close overlay BEFORE pasting to ensure focus returns to target app
