@@ -42,7 +42,11 @@ public class TextInjector
     [DllImport("user32.dll")]
     private static extern IntPtr GetFocus();
 
+    [DllImport("user32.dll")]
+    private static extern bool IsIconic(IntPtr hWnd);
+
     private const int SW_SHOW = 5;
+    private const int SW_RESTORE = 9;
 
     public TextInjector()
     {
@@ -86,7 +90,13 @@ public class TextInjector
             System.Diagnostics.Debug.WriteLine($"GetFocus returned: {focusedChild}");
 
             // Now bring the target to foreground
-            ShowWindow(hWnd, SW_SHOW);
+            // Only restore if minimized (iconic). If maximized or normal, SW_SHOW might restore it down.
+            if (IsIconic(hWnd))
+            {
+                ShowWindow(hWnd, SW_RESTORE);
+            }
+            // else: window is already visible/maximized, just activate it
+            
             BringWindowToTop(hWnd);
             SetForegroundWindow(hWnd);
         }
