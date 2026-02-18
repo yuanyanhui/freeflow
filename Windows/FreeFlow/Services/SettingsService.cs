@@ -8,7 +8,7 @@ public class Settings
 {
     public string CustomVocabulary { get; set; } = "";
     public int SelectedMicrophoneIndex { get; set; } = 0;
-    public bool IsPostProcessingEnabled { get; set; } = true;
+    public bool IsPostProcessingEnabled { get; set; } = false;
 }
 
 public class SettingsService
