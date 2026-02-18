@@ -53,8 +53,18 @@ public partial class App : Application
     private void InitializeTray()
     {
         _notifyIcon = new TaskbarIcon();
-        // Use a system icon as fallback
-        _notifyIcon.Icon = SystemIcons.Application;
+        
+        // Load the icon from the application resources
+        var iconStream = Application.GetResourceStream(new Uri("pack://application:,,,/icon.ico"))?.Stream;
+        if (iconStream != null)
+        {
+            _notifyIcon.Icon = new Icon(iconStream);
+        }
+        else
+        {
+            _notifyIcon.Icon = SystemIcons.Application;
+        }
+
         _notifyIcon.ToolTipText = "FreeFlow - Hold Win + J to record";
 
         var contextMenu = new System.Windows.Controls.ContextMenu();
